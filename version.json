@@ -1,6 +1,7 @@
 {
-  "automatedTestsPassed": 52,
+  "sourceCommit": "0747504eddfb8a21d70b5c20adf04083c2338931",
   "testedOn": "2026-09-09",
   "nightlyEndToEndValidated": false,
-  "sourceCommit": "c7c2ef6b9fe8c748be347aefa365322a083c2b5a"
+  "automatedTestsPassed": 52,
+  "browserTransactionConstructionValidated": true
 }
