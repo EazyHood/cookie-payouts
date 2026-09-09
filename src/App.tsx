@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { motion, AnimatePresence, MotionConfig, useReducedMotion } from "motion/react";
 import { PublicKey } from "@solana/web3.js";
 import {
   connection,
@@ -30,6 +30,7 @@ import {
 import AuditView from "./AuditView";
 import { downloadText, planJson } from "./plan";
 import { submitSignedBatches } from "./send";
+import { Icon } from "./Icon";
 import "./App.css";
 
 const SAMPLE = `# Add your recipients: address, amount in COOK
@@ -61,6 +62,7 @@ function useHashRoute() {
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);
   }, []);
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }, [hash]);
   return hash;
 }
 
@@ -111,41 +113,67 @@ export default function App() {
   const auditMatch = hash.match(/^#\/audit(?:\/(.+))?$/);
   const facts = useChainFacts();
   const genesisOk = facts?.genesis === GENESIS_HASH;
+  const viewName = auditMatch ? "Reconciliation" : receiptMatch ? "Transaction receipt" : "New payout";
 
   return (
-    <div className="app">
-      <header className="chrome">
-        <div className="wordmark">
-          <span className="mark" aria-hidden="true" />
-          Cookie Payouts
+    <MotionConfig reducedMotion="user"><div className="app-shell">
+      <aside className="sidebar">
+        <a className="brand" href="#make" aria-label="Cookie Payouts home">
+          <span className="brand-mark"><Icon name="receipt" size={24} /></span>
+          <span className="brand-name">cookie<small>payouts</small></span>
+        </a>
+        <p className="nav-label">Your workspace</p>
+        <nav className="main-nav" aria-label="Main navigation">
+          <a href="#make" className={!auditMatch && !receiptMatch ? "active" : ""} aria-current={!auditMatch && !receiptMatch ? "page" : undefined}><Icon name="send" size={18} />New payout<Icon name="chevron" size={14} className="nav-arrow" /></a>
+          <a href="#/audit" className={auditMatch ? "active" : ""} aria-current={auditMatch ? "page" : undefined}><Icon name="compare" size={18} />Reconcile<Icon name="chevron" size={14} className="nav-arrow" /></a>
+          {receiptMatch && <a href={hash} className="active" aria-current="page"><Icon name="receipt" size={18} />Receipt</a>}
+        </nav>
+        <div className="rail-guide">
+          <Icon name="shield" size={24} />
+          <h2>Close the loop.</h2>
+          <p>Check every recipient and amount against the chain. No wallet needed.</p>
+          <a href="#/audit">Explore reconciliation <Icon name="arrow" size={15} /></a>
         </div>
-        <nav aria-label="Main navigation"><a href="#make">Pay</a><a href="#/audit">Reconcile</a></nav>
-        <ChainBadge facts={facts} ok={genesisOk} />
-      </header>
+        <div className="rail-resources">
+          <a href="https://docs.cookiechain.wtf/wallets" target="_blank" rel="noreferrer"><Icon name="wallet" size={15} />Wallet setup<Icon name="external" size={12} className="nav-arrow" /></a>
+          <a href="https://github.com/EazyHood/cookie-payouts" target="_blank" rel="noreferrer"><Icon name="file" size={15} />Source & documentation<Icon name="external" size={12} className="nav-arrow" /></a>
+        </div>
+        <div className="rail-bottom"><span className="dot" />BUILT ON COOKIE CHAIN</div>
+      </aside>
+      <div className="workspace-shell">
+        <header className="workspace-bar">
+          <div className="breadcrumb"><span>Workspace</span><Icon name="chevron" size={12} /><strong>{viewName}</strong></div>
+          <div className="workspace-network"><span className="network-label">NATIVE COOK</span>
+            <details className="network-details"><summary><span className="visually-hidden">Network details: </span><ChainBadge facts={facts} ok={genesisOk} /><Icon name="chevron" size={12} /></summary>
+              <div className="network-popover"><p className="eyebrow">Current session</p><h2>Network snapshot</h2>
+                <dl className="kv"><dt>Network</dt><dd>{genesisOk ? "Cookie Chain" : "Not verified"}</dd><dt>Slot</dt><dd className="mono">{facts?.slot?.toLocaleString("en-US") ?? "—"}</dd><dt>Transactions</dt><dd className="mono">{facts?.transactionCount?.toLocaleString("en-US") ?? "—"}</dd><dt>Rent exempt minimum</dt><dd className="mono">{facts?.rent != null ? `${formatCook(facts.rent)} COOK` : "—"}</dd></dl>
+                <p className="network-genesis">Genesis<span className="mono">{facts?.genesis ?? "Reading network…"}</span></p><a href={RPC_URL} target="_blank" rel="noreferrer">Public RPC <Icon name="external" size={12} /></a>
+              </div>
+            </details>
+          </div>
+        </header>
 
       {auditMatch ? (
         <AuditView key={hash} initialSignatures={auditMatch[1] ? decodeReceipt(safeDecode(auditMatch[1])) : []} />
       ) : receiptMatch ? (
         <ReceiptView key={receiptMatch[1]} encoded={safeDecode(receiptMatch[1])} />
       ) : (
-        <>
-          <Hero facts={facts} genesisOk={genesisOk} />
-          <PayoutView chainOk={genesisOk} />
-        </>
+        <PayoutView chainOk={genesisOk} />
       )}
 
       <footer className="foot">
         <p>
-          Native transfers are read from Cookie Chain at <code>{RPC_URL}</code> in your browser.
-          Comparison plans are supplied by the reader. An RPC response is not proof of identity or a prior agreement.
+          Native COOK · Read at confirmed commitment. Comparison plans are supplied by the reader;
+          a chain observation does not prove identity or a prior agreement.
         </p>
         <p>
           <a href="https://github.com/EazyHood/cookie-payouts" target="_blank" rel="noreferrer">
-            Source on GitHub
+            Open source <Icon name="external" size={12} />
           </a>
         </p>
       </footer>
-    </div>
+      </div>
+    </div></MotionConfig>
   );
 }
 
@@ -171,154 +199,6 @@ function ChainBadge({ facts, ok }: { facts: ChainFacts | null; ok: boolean }) {
       <span className="dot" />
       {ok ? "Cookie Chain" : "wrong chain"}
     </span>
-  );
-}
-
-/* ------------------------------------------------------------------------ hero */
-
-function Hero({ facts, genesisOk }: { facts: ChainFacts | null; genesisOk: boolean }) {
-  const reduce = useReducedMotion();
-  const rise = (i: number) => ({
-    initial: reduce ? {} : { opacity: 0, y: 18 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.7, delay: 0.06 * i, ease: [0.16, 1, 0.3, 1] as const },
-  });
-
-  return (
-    <section className="hero">
-      <div>
-        <motion.p className="eyebrow" {...rise(0)}>
-          Cookie Chain · payments and reconciliation
-        </motion.p>
-        <motion.h1 {...rise(1)}>
-          Pay the list. <em>Check every amount.</em>
-        </motion.h1>
-        <motion.p className="lede" {...rise(2)}>
-          Send native COOK to contributors, then compare what was expected with what reached the chain.
-          <strong> Find missing, extra and incorrect amounts</strong> by sender and recipient.
-          Anyone can check a receipt without connecting a wallet.
-        </motion.p>
-        <motion.div className="herolinks" {...rise(3)}>
-          <a href="#/audit" className="button-link primary-link">Try reconciliation</a>
-          <a href="#make" className="button-link">Make a payout</a>
-        </motion.div>
-
-        <motion.p className="aside" {...rise(4)}>
-          Start with a public chain example, then change the expected amount to see the difference.
-          The example is an external transaction, not a payment created by this app.
-        </motion.p>
-      </div>
-
-      <ChainAttestation facts={facts} genesisOk={genesisOk} />
-    </section>
-  );
-}
-
-/**
- * The signature element: a receipt that attests to the thing this whole product
- * depends on — that the app is talking to the real Cookie Chain — and prints
- * itself line by line as the RPC answers. It stamps NOT VERIFIED just as
- * readily, which is the point: a receipt that can only say yes is decoration.
- */
-function ChainAttestation({ facts, genesisOk }: { facts: ChainFacts | null; genesisOk: boolean }) {
-  const reduce = useReducedMotion();
-  const settled = facts !== null;
-  const failed = settled && (!!facts.error || !genesisOk);
-
-  const rows: { k: string; v: string | null; tone?: "pos" | "neg" }[] = [
-    { k: "Network", v: settled && !facts.error ? "Cookie Chain · SVM" : null },
-    {
-      k: "Genesis",
-      v: facts?.genesis ? short(facts.genesis, 8, 8) : null,
-      tone: settled ? (genesisOk ? "pos" : "neg") : undefined,
-    },
-    { k: "Slot", v: facts?.slot ? facts.slot.toLocaleString("en-US") : null },
-    {
-      k: "Block height",
-      v: facts?.blockHeight ? facts.blockHeight.toLocaleString("en-US") : null,
-    },
-    {
-      k: "Transactions",
-      v: facts?.transactionCount ? facts.transactionCount.toLocaleString("en-US") : null,
-    },
-    {
-      k: "Rent exempt min",
-      v: facts?.rent !== undefined ? `${formatCook(facts.rent)} COOK` : null,
-    },
-  ];
-
-  return (
-    <motion.div
-      className="sheet-wrap"
-      initial={reduce ? {} : { opacity: 0, y: 26, rotateX: 6 }}
-      animate={{ opacity: 1, y: 0, rotateX: 0 }}
-      transition={{ duration: 0.9, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
-    >
-      <div className="sheet">
-        <div className="sheet-head">
-          <span className="sheet-title">Chain attestation</span>
-          <span className="sheet-meta">read live</span>
-        </div>
-
-        {rows.map((r, i) => (
-          <div className="sheet-row" key={r.k}>
-            <span className="k">{r.k}</span>
-            {/* `mode="wait"` needs the exit to actually finish. The pending
-                shimmer repeats forever, and without its own exit transition the
-                exit inherits that repeat, never completes, and the real value
-                never gets to render — the receipt sat on "reading…" with the
-                data already in hand. */}
-            <AnimatePresence mode="wait" initial={false}>
-              {r.v === null ? (
-                <motion.span
-                  key="pending"
-                  className="v pending"
-                  initial={{ opacity: 0.35 }}
-                  animate={{ opacity: [0.35, 0.75, 0.35] }}
-                  exit={{ opacity: 0, transition: { duration: 0.18 } }}
-                  transition={{ duration: 1.3, repeat: Infinity, delay: i * 0.12 }}
-                >
-                  reading…
-                </motion.span>
-              ) : (
-                // Opacity only, no transform. Animating the position of small
-                // mono text puts it on its own compositor layer, and a layer
-                // that has not been painted yet renders as an empty row — the
-                // slip looked blank while the values sat in the DOM. A fade
-                // carries the same sequence without that risk.
-                <motion.span
-                  key="value"
-                  className={`v ${r.tone ?? ""}`}
-                  initial={reduce ? {} : { opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5, delay: i * 0.11, ease: "easeOut" }}
-                >
-                  {r.v}
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </div>
-        ))}
-
-        <div className="sheet-total">
-          <span>Matches Cookie Chain</span>
-          <span>{settled ? (genesisOk ? "yes" : "no") : "—"}</span>
-        </div>
-
-        <AnimatePresence>
-          {settled && (
-            <motion.span
-              className={`stamp ${failed ? "neg" : "pos"}`}
-              initial={reduce ? {} : { opacity: 0, scale: 1.6, rotate: -22 }}
-              animate={{ opacity: 0.88, scale: 1, rotate: -7 }}
-              transition={{ duration: 0.5, delay: 0.75, ease: [0.34, 1.56, 0.64, 1] }}
-            >
-              {failed ? "Not verified" : "Verified"}
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.div>
   );
 }
 
@@ -486,10 +366,19 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
     statuses.length > 0 && statuses.every((s) => ["confirmed", "failed", "uncertain", "skipped"].includes(s.state));
 
   return (
-    <main className="instrument" id="make">
-      <p className="rule">The instrument</p>
+    <main className="instrument payout-workspace" id="make">
+      <div className="workspace-heading">
+        <div className="page-intro"><p className="eyebrow">Payment operations</p><h1>Pay your people.</h1>
+          <p>One list for your contributors. Every amount accounted for.</p></div>
+        <a href="#/audit" className="button-link"><Icon name="compare" size={17} />Reconcile a payout</a>
+      </div>
+      <div className="flow-strip" aria-label="Payout preparation">
+        <span className={`flow-step ${parsed.recipients.length && !parsed.errors.length ? "done" : "active"}`}><b>{parsed.recipients.length && !parsed.errors.length ? <Icon name="check" size={12} /> : "1"}</b>Prepare your list</span><span className="flow-line" />
+        <span className={`flow-step ${wallet ? "done" : ""}`}><b>{wallet ? <Icon name="check" size={12} /> : "2"}</b>Connect wallet</span><span className="flow-line" />
+        <span className={`flow-step ${!blocker ? "active" : ""}`}><b>3</b>Review & pay</span>
+      </div>
       {savedRun && <section className="card saved-run">
-        <h2>Previous run saved on this device</h2>
+        <h2><Icon name="clock" size={20} />Previous run saved on this device</h2>
         <p className="hint">A broadcast was attempted for {savedRun.signatures.length} transaction(s). Read their current status before making another payout. A timeout does not prove they failed.</p>
         <div className="btnrow">
           <a className="button-link" href={receiptUrl(savedRun.signatures)}>Check saved receipt</a>
@@ -500,26 +389,23 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
         {!running && <><label className="check-label"><input type="checkbox" checked={reviewedRun} onChange={e => setReviewedRun(e.target.checked)} />I checked this run and understand that paying the same list again can duplicate payments.</label>
           <button disabled={!reviewedRun} onClick={clearReviewedRun}>Start a different payout</button></>}
       </section>}
-      <div className="grid">
-        <section className="card">
-          <h2>
-            <span className="step">01</span> The list
-          </h2>
-          <p className="hint">
-            One address and COOK amount per line, up to 200 recipients. Fix every rejected line before sending.
-          </p>
-          <label className="visually-hidden" htmlFor="payout-list">Recipients</label>
+      <div className="grid payout-grid">
+        <section className="card recipients-panel">
+          <div className="card-heading"><h2><span className="icon-box"><Icon name="users" size={18} /></span>Recipients</h2><span className="card-caption">01 / PREPARE</span></div>
+          <label className="editor-label" htmlFor="payout-list">Your payout list<span>Up to 200 recipients</span></label>
           <textarea
+            className="recipient-editor"
             value={text}
             id="payout-list"
             disabled={running || !!savedRun}
             spellCheck={false}
             onChange={(e) => setText(e.target.value)}
-            rows={11}
-            aria-label="Recipients"
+            rows={7}
+            placeholder="Wallet address, amount in COOK"
           />
-          <div className="btnrow" style={{ marginTop: 12 }}><button disabled={!wallet || !!parsed.errors.length || !parsed.recipients.length || running}
-            onClick={() => wallet && downloadText("cookie-payout-plan.json", planJson({ sender: wallet.publicKey.toBase58(), recipients: parsed.recipients }), "application/json")}>Download plan before paying</button></div>
+          <p className="editor-help"><Icon name="info" size={14} />One wallet address and COOK amount per line, separated by a comma. Every rejected row must be fixed.</p>
+          <div className="btnrow"><button className="quiet" disabled={!wallet || !!parsed.errors.length || !parsed.recipients.length || running}
+            onClick={() => wallet && downloadText("cookie-payout-plan.json", planJson({ sender: wallet.publicKey.toBase58(), recipients: parsed.recipients }), "application/json")}><Icon name="download" size={15} />Download plan before paying</button></div>
           <div className="tally">
             <div>
               <span className="n">{parsed.recipients.length}</span>
@@ -554,17 +440,25 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
               </motion.ul>
             )}
           </AnimatePresence>
+          <div className="recipient-preview">
+            <div className="preview-title"><strong>List preview</strong><span>{parsed.recipients.length ? `${parsed.recipients.length} valid row${parsed.recipients.length === 1 ? "" : "s"}` : "Awaiting your list"}</span></div>
+            {parsed.recipients.length ? <>
+              <ul className="preview-list">{parsed.recipients.slice(0,5).map((recipient,index) => <li key={recipient.address}>
+                <span className="recipient-person"><span className="recipient-avatar">{String(index+1).padStart(2,"0")}</span><span className="mono" title={recipient.address}>{short(recipient.address,6,6)}</span></span>
+                <strong>{formatCook(recipient.units)} <span className="muted">COOK</span></strong>
+              </li>)}</ul>
+              {parsed.recipients.length > 5 && <p className="hint">+ {parsed.recipients.length-5} more recipients in the list above.</p>}
+            </> : <div className="recipient-empty"><Icon name="file" size={27} /><span><strong>Your recipients will appear here</strong>Paste a list above to review addresses and amounts.</span></div>}
+          </div>
         </section>
 
-        <section className="card">
-          <h2>
-            <span className="step">02</span> The wallet
-          </h2>
+        <section className="card wallet-panel">
+          <div className="card-heading"><h2><span className="icon-box"><Icon name="wallet" size={18} /></span>Funding wallet</h2><span className="card-caption">02 / CONNECT</span></div>
           {!wallet ? (
             <>
+              <div className="wallet-illustration"><span className="wallet-symbol"><Icon name="wallet" size={23} /></span><span><strong>Make it your payout</strong><small>Connect a Nightly SVM account</small></span></div>
               <p className="hint">
-                Connect a Nightly SVM account. The wallet signs; this app submits to Cookie Chain.
-                Depending on wallet support, a large payout may require multiple approvals.
+                Your wallet signs the transactions. Larger payouts may need more than one approval.
               </p>
               {providers.length === 0 ? (
                 <p className="note bad">
@@ -578,7 +472,7 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
                 <div className="btnrow">
                   {providers.map((p) => (
                     <button key={p.name} className="primary" disabled={connecting || running} onClick={() => onConnect(p)}>
-                      {connecting ? "Connecting…" : `Connect ${p.name}`}
+                      <Icon name="wallet" size={16} />{connecting ? "Connecting…" : `Connect ${p.name}`}
                     </button>
                   ))}
                 </div>
@@ -618,15 +512,14 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
               Short by {formatCook(needed - (balance ?? 0n))} COOK. Nothing has been sent.
             </p>
           )}
-          <p className="hint" style={{ marginTop: 16 }}>Need a Cookie Chain account or native COOK? <a href="https://docs.cookiechain.wtf/wallets" target="_blank" rel="noreferrer">Wallet setup</a> · <a href="https://docs.cookiechain.wtf/bridge" target="_blank" rel="noreferrer">Bridge guide</a></p>
+          <div className="wallet-guides"><a href="https://docs.cookiechain.wtf/wallets" target="_blank" rel="noreferrer">Wallet setup <Icon name="external" size={12} /></a><a href="https://docs.cookiechain.wtf/bridge" target="_blank" rel="noreferrer">Get native COOK <Icon name="external" size={12} /></a></div>
           {walletError && <p className="note bad" role="alert">{walletError}{walletError.includes("501") && " — Open Nightly and create or select an SVM account, then connect again."}</p>}
           {previewError && <p className="note bad" role="alert">{previewError}</p>}
         </section>
 
-        <section className="card wide">
-          <h2>
-            <span className="step">03</span> Send, then prove it
-          </h2>
+        <section className="card send-panel">
+          <div className="card-heading"><h2><span className="icon-box"><Icon name="send" size={18} /></span>Review & pay</h2><span className="card-caption">03 / APPROVE</span></div>
+          <div className="payment-total"><span>{fee !== null ? "Total including network fee" : "Payout amount · fee pending"}</span><strong>{formatCook(fee !== null ? needed : total)} <small>COOK</small></strong></div>
           <motion.button
             className="primary big"
             disabled={!!blocker}
@@ -634,11 +527,13 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
             onClick={onSend}
             whileTap={{ scale: 0.995 }}
           >
+            <Icon name="send" size={17} />
             {running
               ? "Sending…"
               : `Pay ${parsed.recipients.length} recipient${parsed.recipients.length === 1 ? "" : "s"}`}
           </motion.button>
           <p className="hint" id="payout-blocker" style={{ marginTop: 12 }}>{blocker ?? "Review the full list, total and fee above. You approve each required transaction in your wallet."}</p>
+          <div className="payment-security"><Icon name="shield" size={14} />You approve each required transaction in your wallet.</div>
 
           {statuses.length > 0 && (
             <ol className="batches">
@@ -785,17 +680,16 @@ function ReceiptView({ encoded }: { encoded: string }) {
   const allGood = !!s && s.failed === 0 && s.missing === 0 && s.unresolved === 0 && s.paid > 0 && s.recipients > 0;
 
   return (
-    <main className="instrument" style={{ paddingTop: "clamp(36px,6vw,72px)" }}>
-      <p className="rule">Transaction receipt · read from Cookie Chain</p>
+    <main className="instrument receipt-page">
+      <div className="workspace-heading"><div><p className="eyebrow">Payment evidence</p><h1>A receipt you can check.</h1><p>Native transfers, read directly from Cookie Chain.</p></div><a className="button-link" href={`#/audit/${signatures.join(".")}`}><Icon name="compare" size={17} />Compare with a plan</a></div>
       {readError && <p className="note bad" role="alert">{readError} <button onClick={() => { setTxs(null); setReadError(null); setReadAttempt(n => n + 1); }}>Read again</button></p>}
 
       <motion.div
-        className="sheet-wrap"
+        className="sheet-wrap receipt-stage"
         hidden={!!readError}
-        style={{ maxWidth: 620, margin: "0 auto 26px" }}
         initial={reduce ? {} : { opacity: 0, y: 22 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="sheet">
           <div className="sheet-head">
@@ -838,18 +732,7 @@ function ReceiptView({ encoded }: { encoded: string }) {
             <span>{s ? `${formatCook(s.total)} COOK` : "—"}</span>
           </div>
 
-          <AnimatePresence>
-            {txs && (
-              <motion.span
-                className={`stamp ${allGood ? "pos" : "neg"}`}
-                initial={reduce ? {} : { opacity: 0, scale: 1.6, rotate: -22 }}
-                animate={{ opacity: 0.88, scale: 1, rotate: -7 }}
-                transition={{ duration: 0.5, delay: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
-              >
-                {allGood ? "Observed on chain" : "Review required"}
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {txs && <span className={`stamp ${allGood ? "pos" : "neg"}`}><Icon name={allGood ? "check" : "info"} size={14} />{allGood ? "Observed on chain" : "Review required"}</span>}
         </div>
       </motion.div>
 

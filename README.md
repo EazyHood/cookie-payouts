@@ -10,7 +10,7 @@ A community manager needs more than a successful transaction: the right people m
 
 ## Review it in a minute
 
-1. Open [Reconcile](https://eazyhood.github.io/cookie-payouts/#/audit) and select **Load a public chain example**. No wallet or funds are required.
+1. Open [Reconcile](https://eazyhood.github.io/cookie-payouts/#/audit) and select **Load example**. No wallet or funds are required.
 2. Select **Compare with the chain**. The example contains one native transfer of 100 COOK.
 3. Change the expected amount and compare again:
 

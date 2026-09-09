@@ -1,0 +1,185 @@
+.audit-workspace {
+  --audit-success-wash: color-mix(in srgb, var(--verify) 7%, var(--surface));
+  --audit-warning-wash: color-mix(in srgb, var(--amber) 13%, var(--surface));
+  --audit-danger-wash: color-mix(in srgb, var(--reject) 6%, var(--surface));
+  color: var(--fg);
+  min-width: 0;
+}
+.audit-header { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 24px; }
+.audit-eyebrow { margin: 0 0 8px; color: var(--fg-dim); font: 600 12px/1.5 var(--ui); letter-spacing: .12em; text-transform: uppercase; }
+.audit-workspace .audit-title { margin: 0; color: var(--fg); font: 500 clamp(30px, 3vw, 38px)/1.15 var(--display); letter-spacing: -.035em; }
+.audit-description { margin: 12px 0 0; max-width: 60ch; color: var(--fg-mid); font-size: 14px; line-height: 1.6; }
+.audit-header-actions { display: flex; flex-direction: column; align-items: end; gap: 12px; flex: none; }
+.audit-header-actions button, .audit-workspace .audit-export-actions button, .audit-workspace .audit-export-actions a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; font-size: 12px; }
+.audit-mode { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-mid); font-size: 12px; white-space: nowrap; }
+.audit-reference { display: flex; align-items: center; gap: 16px; padding: 18px 20px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--audit-success-wash); }
+.audit-reference-icon { width: 42px; height: 42px; display: grid; place-items: center; flex: none; border: 1px solid var(--line); border-radius: 10px; color: var(--verify); background: var(--surface); }
+.audit-reference-copy { flex: 1; min-width: 0; }
+.audit-reference-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.audit-reference .audit-reference-heading h2 { margin: 0; font: 600 14px/1.5 var(--ui); letter-spacing: -.01em; }
+.audit-reference-copy p { margin: 4px 0 0; color: var(--fg-mid); font-size: 12px; line-height: 1.6; }
+.audit-tag { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--fg-mid); font: 500 12px/1.4 var(--ui); }
+.audit-reference .audit-reference-disclosure { margin-top: 8px; font-size: 12px; }
+.audit-reference-disclosure a { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
+.audit-workspace .audit-reference-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 40px; padding: 8px 12px; flex: none; color: var(--fg); background: var(--surface); border-color: var(--line); font-size: 12px; }
+.audit-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; gap: 20px; }
+.audit-workspace .audit-panel { min-width: 0; padding: 24px; border-radius: var(--r-lg); }
+.audit-panel-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.audit-panel-heading > div { flex: 1; min-width: 0; }
+.audit-panel-heading > svg { color: var(--fg-dim); flex: none; }
+.audit-step { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; background: var(--surface-soft); border: 1px solid var(--line); color: var(--fg-mid); font: 500 12px/1 var(--mono); flex: none; }
+.audit-panel-heading h2 { margin: 0; font: 600 16px/1.4 var(--ui); letter-spacing: -.02em; }
+.audit-panel-heading p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--fg-mid); }
+.audit-field + .audit-field { margin-top: 20px; }
+.audit-field label { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 8px; color: var(--fg); font: 500 14px/1.5 var(--ui); }
+.audit-field label > span { color: var(--fg-dim); font-size: 12px; font-weight: 400; }
+.audit-field input, .audit-field textarea { width: 100%; max-width: 100%; margin: 0; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--fg); font: 400 13px/1.8 var(--mono); box-shadow: none; }
+.audit-field input { min-height: 44px; padding: 10px 12px; }
+.audit-field textarea { display: block; min-height: 164px; padding: 12px; resize: vertical; overflow-wrap: anywhere; }
+.audit-field input::placeholder, .audit-field textarea::placeholder { color: var(--fg-dim); opacity: 1; }
+.audit-field input:focus-visible, .audit-field textarea:focus-visible { border-color: var(--fg-mid); outline: 2px solid var(--fg-mid); outline-offset: 2px; }
+.audit-field input:disabled, .audit-field textarea:disabled { background: var(--surface-soft); opacity: .75; cursor: wait; }
+.audit-helper { margin: 8px 0 0; color: var(--fg-mid); font-size: 12px; line-height: 1.65; }
+.audit-plan-totals { display: grid; grid-template-columns: .8fr 1.2fr; gap: 16px; margin-top: 20px; padding: 16px; background: var(--surface-soft); border-radius: 8px; }
+.audit-plan-totals > div { min-width: 0; }
+.audit-plan-totals > div + div { border-left: 1px solid var(--line); padding-left: 16px; }
+.audit-plan-totals span { display: block; margin-bottom: 6px; color: var(--fg-mid); font-size: 12px; }
+.audit-plan-totals strong { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; color: var(--fg); font: 500 18px/1.5 var(--mono); overflow-wrap: anywhere; }
+.audit-plan-totals small { color: var(--fg-mid); font: 500 12px/1.5 var(--ui); }
+.audit-errors { margin: 10px 0 0; padding: 10px 10px 10px 24px; border-radius: 8px; background: var(--audit-danger-wash); color: var(--reject); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.audit-errors li + li { margin-top: 4px; }
+.audit-evidence-panel { display: flex; flex-direction: column; }
+.audit-signature-field { flex: 1; display: flex; flex-direction: column; }
+.audit-signature-field textarea { flex: 1; min-height: 224px; }
+.audit-signature-help { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.audit-signature-help > span:last-child { font-family: var(--mono); font-size: 12px; }
+.audit-submit-area { padding-top: 20px; }
+.audit-read-assurance { display: flex; align-items: start; gap: 9px; margin-bottom: 14px; color: var(--fg-mid); }
+.audit-read-assurance > svg { margin-top: 2px; flex: none; color: var(--verify); }
+.audit-read-assurance p { margin: 0; font-size: 12px; line-height: 1.6; max-width: 50ch; }
+.audit-workspace .audit-submit { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 46px; gap: 9px; font-size: 13px; }
+.audit-submit > svg:last-child { margin-left: auto; }
+.audit-submit > svg:first-child { margin-right: auto; }
+.audit-error-banner { display: flex; align-items: start; gap: 12px; padding: 16px 20px; margin-top: 20px; background: var(--audit-danger-wash); border: 1px solid color-mix(in srgb, var(--reject) 25%, var(--line)); border-radius: 10px; }
+.audit-error-banner > svg { flex: none; margin-top: 2px; color: var(--reject); }
+.audit-error-banner strong { font: 600 13px/1.5 var(--ui); color: var(--reject); }
+.audit-error-banner p { margin: 4px 0; color: var(--fg); font-size: 12px; overflow-wrap: anywhere; }
+.audit-error-banner span { color: var(--fg-mid); font-size: 12px; }
+.audit-workspace .audit-empty-report { display: flex; align-items: center; gap: 20px; min-height: 152px; margin-top: 24px; padding: 28px; border-radius: var(--r-lg); background: var(--surface); }
+.audit-empty-icon { width: 56px; height: 56px; display: grid; place-items: center; flex: none; color: var(--fg-mid); border: 1px solid var(--line); border-radius: 50%; background: var(--surface-soft); }
+.audit-empty-report .audit-eyebrow { margin-bottom: 5px; font-size: 12px; }
+.audit-empty-report h2 { margin: 0; font: 500 22px/1.35 var(--display); letter-spacing: -.02em; }
+.audit-empty-report p:last-child { margin: 8px 0 0; max-width: 70ch; color: var(--fg-mid); font-size: 12px; line-height: 1.6; }
+.audit-loading-lines { display: flex; flex-direction: column; gap: 8px; width: 120px; margin-left: auto; flex: none; }
+.audit-loading-lines span { height: 8px; border-radius: 4px; background: var(--line); }
+.audit-loading-lines span:nth-child(2) { width: 82%; }
+.audit-loading-lines span:nth-child(3) { width: 60%; }
+.audit-workspace .audit-report { margin-top: 24px; padding: 0; overflow: hidden; border-radius: var(--r-lg); }
+.audit-report-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px; }
+.audit-report-heading h2 { margin: 0; font: 500 clamp(22px, 2vw, 27px)/1.35 var(--display); letter-spacing: -.025em; }
+.audit-report-heading .audit-eyebrow { margin-bottom: 6px; }
+.audit-verdict { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 10px; border-radius: 6px; white-space: nowrap; font: 600 12px/1.5 var(--ui); }
+.audit-verdict-match { color: var(--verify); background: var(--audit-success-wash); }
+.audit-verdict-review { color: var(--fg); background: var(--audit-warning-wash); }
+.audit-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 24px 20px; padding: 20px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.audit-stat { min-width: 0; padding: 0 20px; }
+.audit-stat:first-child { padding-left: 0; }
+.audit-stat:last-child { padding-right: 0; }
+.audit-stat + .audit-stat { border-left: 1px solid var(--line); }
+.audit-stat > span { font-size: 12px; color: var(--fg-mid); }
+.audit-stat strong { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 8px 0 5px; font: 500 clamp(16px, 1.9vw, 27px)/1.4 var(--mono); letter-spacing: -.04em; overflow-wrap: anywhere; }
+.audit-stat strong small { color: var(--fg-mid); font: 500 12px/1.5 var(--ui); letter-spacing: 0; }
+.audit-stat p { margin: 0; color: var(--fg-dim); font-size: 12px; line-height: 1.5; }
+.audit-stat-difference strong { color: var(--reject); }
+.audit-report-counts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; padding: 0 24px 18px; font-size: 12px; color: var(--fg-mid); }
+.audit-report-counts > span { display: inline-flex; align-items: center; gap: 5px; }
+.audit-report-counts strong { font: 500 12px/1.5 var(--mono); color: var(--fg); }
+.audit-report-counts .audit-count-warning, .audit-count-warning strong { color: var(--reject); }
+.audit-table-wrap { max-height: 440px; overflow: auto; scrollbar-color: var(--line) transparent; }
+.audit-workspace .audit-table { width: 100%; min-width: 700px; margin: 0; border-collapse: collapse; font-size: 12px; }
+.audit-table th { position: sticky; top: 0; z-index: 1; padding: 12px 16px; background: var(--surface-soft); color: var(--fg-mid); text-align: left; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font: 500 12px/1.5 var(--ui); letter-spacing: 0; text-transform: none; white-space: nowrap; }
+.audit-table td { padding: 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.audit-table th:first-child, .audit-table td:first-child { padding-left: 24px; }
+.audit-table th:last-child, .audit-table td:last-child { padding-right: 24px; }
+.audit-table .num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.audit-table th.num { font-family: var(--ui); }
+.audit-address { display: inline-flex; align-items: center; gap: 7px; min-height: 24px; color: var(--fg); font: 400 12px/1.5 var(--mono); white-space: nowrap; }
+.audit-address > svg { color: var(--fg-dim); }
+.audit-delta { color: var(--reject); }
+.audit-row-status { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border-radius: 4px; font: 500 12px/1.4 var(--ui); text-transform: capitalize; white-space: nowrap; }
+.audit-row-match { color: var(--verify); background: var(--audit-success-wash); }
+.audit-row-review { color: var(--fg); background: var(--audit-warning-wash); }
+.audit-result-warning { display: flex; align-items: start; gap: 9px; margin: 16px 24px 0; padding: 12px; background: var(--audit-warning-wash); color: var(--fg); font-size: 12px; line-height: 1.6; border-radius: 8px; }
+.audit-result-warning > svg { flex: none; margin-top: 2px; }
+.audit-report-note { margin: 14px 24px 0; }
+.audit-report-footer { padding: 20px 24px; }
+.audit-read-time { display: flex; align-items: start; gap: 6px; margin-bottom: 16px; color: var(--fg-dim); font-size: 12px; line-height: 1.5; }
+.audit-read-time > svg { flex: none; }
+.audit-export-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.audit-workspace .audit-receipt-action { margin-left: auto; padding-right: 0; border-color: transparent; background: transparent; color: var(--fg); }
+.audit-report-footer > .audit-helper { max-width: 100ch; margin-top: 16px; }
+.audit-scope { display: flex; align-items: start; gap: 8px; padding: 18px 2px 0; color: var(--fg-dim); }
+.audit-scope > svg { flex: none; margin-top: 3px; }
+.audit-scope p { margin: 0; max-width: 118ch; font-size: 12px; line-height: 1.7; }
+.audit-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .audit-loading-lines span { animation: audit-pulse 1.5s ease-in-out infinite; }
+  .audit-loading-lines span:nth-child(2) { animation-delay: .15s; }
+  .audit-loading-lines span:nth-child(3) { animation-delay: .3s; }
+}
+@keyframes audit-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (max-width: 1000px) {
+  .audit-header { align-items: start; }
+  .audit-header-actions { gap: 10px; }
+  .audit-form { gap: 16px; }
+  .audit-workspace .audit-panel { padding: 20px; }
+  .audit-panel-heading { gap: 9px; }
+  .audit-panel-heading > svg { display: none; }
+  .audit-reference { align-items: start; }
+  .audit-reference-heading { display: block; }
+  .audit-tag { margin-top: 5px; }
+  .audit-workspace .audit-receipt-action { margin-left: 0; }
+}
+@media (max-width: 760px) {
+  .audit-header { flex-direction: column; gap: 18px; }
+  .audit-header-actions { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; }
+  .audit-form { grid-template-columns: minmax(0, 1fr); }
+  .audit-panel-heading > svg { display: block; }
+  .audit-reference { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 16px; }
+  .audit-reference-icon { width: 36px; height: 36px; border-radius: 8px; }
+  .audit-reference-button { grid-column: 2; justify-self: start; }
+  .audit-reference-heading { display: flex; }
+  .audit-tag { margin-top: 0; }
+  .audit-signature-field textarea { min-height: 172px; }
+  .audit-report-heading { align-items: start; padding: 20px; gap: 12px; }
+  .audit-stats { margin: 0 20px 16px; }
+  .audit-stat { padding: 0 12px; }
+  .audit-stat strong { font-size: 21px; }
+  .audit-report-counts { padding: 0 20px 16px; gap: 8px 16px; }
+  .audit-workspace .audit-empty-report { padding: 24px 20px; }
+  .audit-loading-lines { width: 72px; }
+}
+@media (max-width: 480px) {
+  .audit-mode { font-size: 12px; }
+  .audit-header-actions button { padding: 8px 10px; font-size: 12px; }
+  .audit-workspace .audit-panel { padding: 20px 16px; }
+  .audit-field input, .audit-field textarea { font-size: 12px; }
+  .audit-workspace .audit-empty-report { align-items: start; gap: 14px; }
+  .audit-empty-icon { width: 42px; height: 42px; }
+  .audit-empty-report h2 { font-size: 20px; }
+  .audit-loading-lines { display: none; }
+  .audit-report-heading { flex-direction: column; }
+  .audit-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-bottom: 0; }
+  .audit-stat { padding: 0 12px 16px; }
+  .audit-stat:nth-child(2) { padding-right: 0; }
+  .audit-stat:last-child { grid-column: 1 / -1; padding: 16px 0; border-left: 0; border-top: 1px solid var(--line); }
+  .audit-stat strong { font-size: 21px; }
+  .audit-export-actions { align-items: stretch; flex-direction: column; }
+  .audit-workspace .audit-export-actions button, .audit-workspace .audit-export-actions a { justify-content: center; width: 100%; min-height: 44px; }
+  .audit-report-footer { padding: 20px; }
+  .audit-table td { padding-top: 10px; padding-bottom: 10px; }
+  .audit-address { min-height: 40px; }
+  .audit-result-warning, .audit-report-note { margin-left: 20px; margin-right: 20px; }
+  .audit-scope p { font-size: 12px; }
+}
+

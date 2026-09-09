@@ -4,7 +4,7 @@ This records what was checked for the reconciliation update. It is not a securit
 
 ## Automated checks
 
-`npm test`: **52 tests passed**. `npm run lint`: no warnings or errors. `npm run build`: completed; Vite reports a bundle-size warning (about 670 kB minified JavaScript before compression).
+`npm test`: **52 tests passed**. `npm run lint`: no warnings or errors. `npm run build`: completed; Vite reports a bundle-size warning (about 682 kB minified JavaScript before compression).
 
 The tests cover exact nine-decimal amounts and u64 limits, malformed and duplicate rows, 200-recipient limits, serialized batch sizes, missing funds/fees/network guards, wallet message mutation and signatures, plan import/export, RPC response validation and cancellation, native top-level/CPI parsing, duplicate signatures, reconciliation discrepancies and CSV escaping. Sending tests use locally generated test keys and mocked RPC calls to check persistence before broadcast, expiry, failures, uncertainty and stopping later batches. They do not transfer funds.
 
@@ -47,6 +47,14 @@ Reference: [public Cookie Chain transaction](https://cookiescan.io/tx/LiNmNJa4Wx
 | Review desktop and narrow viewport | Navigation and forms fit; wide comparison table scrolls inside its container |
 
 No wallet was connected, no transaction was signed, and no funds were moved during these browser checks. The previously observed Nightly error, `Unable to find any account for 501`, remains an unresolved end-to-end setup gap.
+
+## Workspace design review
+
+The payment workspace, reconciliation view and receipt were restyled with a dark sidebar, light working surfaces, consistent controls and responsive layouts. Payment parsing, signing, persistence, chain reads and reconciliation modules were unchanged.
+
+Browser checks covered 375 px mobile, 768 px tablet and 1440 px desktop layouts without horizontal page overflow. The three receipt navigation links fit on mobile; the receipt stacks its heading and transaction count. The sidebar scrolls independently at reduced desktop height. Keyboard focus is visible, visible form labels are retained as accessible names, network details expose the current network state, and reduced-motion preferences are respected.
+
+The public reference still produced a 100 COOK match and a 101 COOK expected-versus-100 observed shortfall. An entered recipient appeared in the payment preview with the exact 12.5 COOK total; payment remained disabled without a connected wallet. No wallet connection, signing or broadcast was performed for this design review. Build, lint and all 52 existing tests passed after the redesign.
 
 ## Interpretation limits
 
