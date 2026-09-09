@@ -10,6 +10,20 @@ The tests cover exact nine-decimal amounts and u64 limits, malformed and duplica
 
 The cross-tab Web Locks and recovery-record checks were reviewed in code. They have not been exercised with simultaneous live-wallet payouts.
 
+## Browser dependency regression
+
+The development console exposed a `buffer` externalization warning from a dependency fallback. A browser fixture constructed, locally signed and verified a 215-byte native-transfer transaction successfully even before the dependency change; the warning alone did not prove payment failure. Vite now explicitly resolves `buffer` to the browser package, with that package declared directly.
+
+`tests/browser-smoke.html` exercises the actual transaction construction, serialization and signature-verification code with disposable local keys, preserving `1.000000001` COOK exactly. It makes no wallet connection, RPC call or broadcast. To check the production-bundled fixture separately from the deployed app:
+
+```bash
+npx vite build --config tests/vite.browser.config.ts
+npx vite preview --config tests/vite.browser.config.ts --host 127.0.0.1 --port 4176
+# Open http://127.0.0.1:4176/tests/browser-smoke.html
+```
+
+The fixture is a browser compatibility check, not Nightly integration or proof of payment.
+
 ## Browser checks using a real public transaction
 
 Reference: [public Cookie Chain transaction](https://cookiescan.io/tx/LiNmNJa4WxS7DG1zCZR7q6pwtiHRtM3zdXemP4Nkrk9crp2Cy4yZCFSLSoLTW95xX45wzccn74pUjejdArQv7aQ).

@@ -7,4 +7,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   base: "/cookie-payouts/",
   plugins: [react()],
+  // web3.js and rpc-websockets import Buffer explicitly; Vite otherwise treats
+  // that specifier as a Node builtin and externalizes it in the browser.
+  resolve: { alias: [{ find: /^buffer$/, replacement: "buffer/" }] },
 });
