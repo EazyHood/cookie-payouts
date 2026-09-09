@@ -30,13 +30,13 @@
   /* Verdicts. Deep teal, not acid green: this is an audit, not a casino. */
   --verify: #2e9e7e;
   --verify-dim: #143d31;
-  --reject: #c4483c;
+  --reject: #e6776e;
   --reject-dim: #451915;
 
   --paper-fg: var(--sheet-ink);
   --fg: #ede4d6;
   --fg-mid: #b3a595;
-  --fg-dim: #7d7062;
+  --fg-dim: #ae9c89;
 
   --display: "Fraunces", "Iowan Old Style", Georgia, serif;
   --ui: "Archivo", ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -586,6 +586,7 @@ button.primary {
   box-shadow: 0 8px 22px -12px rgba(217, 138, 43, 0.95);
 }
 button.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--amber-bright), var(--amber));
   filter: brightness(1.07);
   box-shadow: 0 12px 28px -12px rgba(217, 138, 43, 1);
 }
@@ -807,6 +808,50 @@ td {
 }
 .foot p { margin: 0; max-width: 62ch; }
 .foot code { font-family: var(--mono); color: var(--fg-mid); }
+
+/* Reconciliation extends the existing instrument; inputs remain distinct from evidence. */
+.chrome nav { display: flex; gap: 8px; margin-left: auto; }
+.chrome nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; }
+.button-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 17px; border: 1px solid var(--ink-500); border-radius: var(--r-md); color: var(--fg); font-size: 13.5px; }
+.button-link:hover { border-color: var(--amber); text-decoration: none; }
+.primary-link { background: var(--amber-bright); color: var(--ink-900); border-color: var(--amber-bright); font-weight: 600; }
+.audit-workspace { padding-top: 48px; }
+.audit-title { max-width: 18ch; font-size: clamp(36px, 5vw, 60px); }
+.audit-workspace > .lede { max-width: 70ch; }
+.audit-actions { margin: 24px 0; }
+.audit-form { margin-top: 28px; }
+.audit-form label { display: block; color: var(--fg-mid); font-size: 13px; margin: 18px 0 7px; }
+.audit-form .hint { margin-top: 9px; }
+.audit-report { margin-top: 28px; }
+.report-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.report-heading .eyebrow { margin-bottom: 10px; }
+.report-heading h2 { font-family: var(--display); font-size: 25px; line-height: 1.25; }
+.audit-report .hint { margin-top: 20px; }
+.table-scroll { overflow-x: auto; margin: 16px 0; }
+.table-scroll table { min-width: 550px; }
+.result-status { white-space: nowrap; }
+.reference-note { border: 1px solid var(--amber-dim); background: var(--ink-700); color: var(--fg-mid); }
+.reference-note strong { color: var(--fg); }
+.scope-note { margin: 24px 0; color: var(--fg-mid); border: 1px solid var(--ink-500); }
+.saved-run { margin-bottom: 24px; border-color: var(--amber-dim); }
+.check-label { display: flex; align-items: start; gap: 12px; color: var(--fg-mid); font-size: 13px; margin: 20px 0 12px; }
+.check-label input { width: 20px; height: 20px; flex: none; margin: 2px 0 0; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.batches li.uncertain { border-left-color: var(--amber); }
+.batches li.skipped { border-left-color: var(--ink-400); }
+button { min-height: 44px; }
+
+@media (max-width: 600px) {
+  .chrome { flex-wrap: wrap; gap: 8px; }
+  .chrome nav { order: 3; width: 100%; margin-left: 0; }
+  .chrome > .badge { margin-left: auto; }
+  .report-heading { flex-direction: column; align-items: start; }
+  .sheet { padding-left: 18px; padding-right: 18px; }
+  .sheet-row .k { white-space: normal; }
+  .sheet-total { gap: 12px; }
+  .copyrow { flex-wrap: wrap; }
+  .audit-workspace { padding-top: 30px; }
+}
 
 /* ---------------------------------------------------------------- responsive */
 

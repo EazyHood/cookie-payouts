@@ -1,78 +1,104 @@
 # Cookie Payouts
 
-**Pay many people on Cookie Chain in one approval, and hand out a receipt anyone can check against the chain.**
+**Batch native COOK payments, then check each recipient against the original plan.**
 
-Live app: <https://eazyhood.github.io/cookie-payouts/>
+[Pay](https://eazyhood.github.io/cookie-payouts/#make) · [Try reconciliation without a wallet](https://eazyhood.github.io/cookie-payouts/#/audit) · [Source](https://github.com/EazyHood/cookie-payouts)
 
-A payout screenshot proves nothing — it is a picture of a claim. This app sends native COOK to a
-list of addresses, then produces a link that carries nothing but transaction signatures. Whoever
-opens that link re-reads those transactions from the Cookie Chain RPC **in their own browser**.
-There is no server and no database, so there is no stored copy of the numbers that the person who
-published the link could have edited.
+A community manager needs more than a successful transaction: the right people must receive the right amounts. Cookie Payouts prepares payments on Cookie Chain and provides a separate reconciliation view. Give it an expected sender, a recipient list and transaction signatures; it reads native transfers from the chain and reports missing amounts, overpayments and unexpected recipients.
 
-The receipt can also come back negative. A signature that is not on chain says *not found*; a
-transaction that confirmed without moving any COOK says so in as many words. A receipt that could
-only ever say "paid" would be decoration.
+**Validation scope:** the public example below is an external transaction, not a payment created by this app. End-to-end payment signing, broadcasting and confirmation with Nightly have **not yet been validated** for this submission. Automated tests exercise the implementation with fixtures and controlled RPC/wallet responses; they do not substitute for that wallet test.
 
-## What it does
+## Review it in a minute
 
-| Step | What happens |
-| --- | --- |
-| 1 · The list | Paste `address, amount` lines. Every unreadable line is reported with its number — nothing is skipped quietly. |
-| 2 · The wallet | Connect Nightly. Balance, payout total and the real network fee are shown before anything is signed. |
-| 3 · Send | Transfers are packed into as few transactions as fit, signed in one approval, and confirmed one by one with live status. |
-| Receipt | A shareable link that re-verifies the whole payout from the chain. |
+1. Open [Reconcile](https://eazyhood.github.io/cookie-payouts/#/audit) and select **Load a public chain example**. No wallet or funds are required.
+2. Select **Compare with the chain**. The example contains one native transfer of 100 COOK.
+3. Change the expected amount and compare again:
 
-## Why the details are the way they are
+| Expected COOK | Observed COOK | Result for the supplied plan |
+| --- | --- | --- |
+| 100 | 100 | Match |
+| 101 | 100 | Underpaid by 1 COOK |
+| 99 | 100 | Overpaid by 1 COOK |
 
-**The wallet only signs; this app sends.** Several wallets implement `signAndSendTransaction` by
-broadcasting through *their own* RPC. For a wallet that does not know Cookie Chain, that means the
-transaction goes to Solana and vanishes. So the app asks only for a signature and submits the signed
-bytes to `rpc.cookiescan.io` itself. That is the difference between a payout that lands and one that
-silently does not.
+4. Export the reconciliation CSV, download the comparison plan or open the transaction receipt. Missing transactions or unavailable RPC data prevent a complete result; a partial observation is not proof that a payment failed.
 
-**The chain is verified at runtime, not assumed.** On load the app calls `getGenesisHash` and
-compares it with Cookie Chain's (`9wDaBRDgArEUpvhHxGguNkwozsZh4UpGZB9o2EoEcBB2`). The badge in the
-header is that check, not a label.
+The [original public transaction](https://cookiescan.io/tx/LiNmNJa4WxS7DG1zCZR7q6pwtiHRtM3zdXemP4Nkrk9crp2Cy4yZCFSLSoLTW95xX45wzccn74pUjejdArQv7aQ) was independently read from Cookie Chain at slot `23437496` with a successful execution result. Its native transfer is:
 
-**Batch sizes are measured, not guessed.** Instructions are added to a transaction until the
-serialized message would cross the 1232-byte packet limit, then the batch is closed. A fixed guess
-either wastes transactions or builds one the cluster rejects after the user has already approved it.
+```text
+Sender:    BwwXgbiHMWqukbxzTjK9QJcp8EPBLc7hWo2A2e9xEsGt
+Recipient: 33n68Rpis2dGYv36xTHaxeMGvkwXDRJnxAHLmFn2o3J3
+Amount:    100000000000 base units = 100 COOK
+```
 
-**Amounts never touch floating point.** `0.1 * 1e9` is `100000000.00000001` in JavaScript. Parsing
-is done with string maths and `BigInt`, so what you type is what is transferred.
+We do not assert its purpose or authorship. It demonstrates reading and comparison only. Changing the example's expected amount changes a local comparison input, not the transaction.
 
-**The receipt reads inner instructions too.** The first real Cookie Chain transaction used for
-testing moved value through a CPI, and a verifier that reads only top-level instructions reported it
-as "confirmed" with zero transfers — a verified-looking receipt for nothing. Both levels are scanned.
+## Pay and keep the plan
 
-## Running it
+1. Install [Nightly](https://nightly.app/) and configure it for Cookie Chain using the [official wallet guide](https://docs.cookiechain.wtf/wallets). If funds are on Solana, follow the [official bridge guide](https://docs.cookiechain.wtf/bridge) and use its [Hyperlane bridge](https://hyperlane.cookiescan.io). The app does not bridge funds.
+2. Open **Pay**, connect Nightly and paste one `address, amount` line per recipient. The limit is 200 recipients. Invalid or duplicate rows block sending until corrected.
+3. Review the connected address, balance, recipient list, total and network fee estimate. **Download plan before paying** saves the expected sender and exact amounts as JSON.
+4. Approve the required transactions in your wallet. Batch signing is preferred when available; otherwise the app requests signatures sequentially. The wallet controls the number of prompts.
+5. Review each batch's status, open its receipt and use **Reconcile this run**. Import the saved plan to compare it with the recorded signatures.
+
+The wallet signs; the app submits the signed bytes to `https://rpc.cookiescan.io`. It checks the returned messages and signatures before broadcasting, rechecks the chain and funding requirements before signing, and stops for review if the fee estimate changed.
+
+## What reconciliation establishes
+
+The reader fetches the supplied signatures from Cookie Chain in their own browser. Only successfully executed native System Program transfer instructions count. The parser checks the program identifier, reads top-level and inner instructions, and retains the source of each transfer. Transfers from a different sender are excluded, repeated signatures count once, and incomplete or conflicting observations remain unresolved.
+
+The report compares amounts per destination, so an extra payment cannot conceal another recipient's shortfall merely because the totals balance. It checks only the supplied signatures; it does not search the sender's entire history.
+
+A plan is **user-supplied input**, not an authenticated prior agreement. A match does not prove who controls an address, why money moved, that the plan existed before payment, or final net account settlement. The receipt URL contains transaction signatures; share the plan separately when another person needs to reproduce the comparison.
+
+Plans are versioned JSON files tied to Cookie Chain's genesis hash, with amounts stored as decimal strings in base units. The reconciliation CSV contains recipient, expected amount, observed amount, difference and status. Its amount columns use base units (`1 COOK = 1,000,000,000`); preserve them as text in spreadsheets when exact large integers matter.
+
+## Interrupted runs and duplicate-payment protection
+
+Before each broadcast attempt, the app saves the signed transaction identifier, sender, original list and timestamp in a local browser journal. If that write fails, it stops before broadcasting that batch. A timeout after an attempted broadcast is **uncertain**, not automatically failed: remaining batches stop and the saved receipt remains available for checking. The app does not create a replacement payment automatically.
+
+Web Locks coordinate sending across tabs on the same origin. A saved run blocks another payout until the user reviews it and explicitly starts a different one. Sending requires Web Locks and usable local storage; reconciliation remains available without a wallet.
+
+This journal is recovery assistance, not a global payment registry. Clearing site data loses it, and it does not coordinate separate browser profiles, origins or devices. Download the run record and original plan before clearing an interrupted run. Paying the same list again can duplicate payments even after clearing the record.
+
+## Development and tests
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # static output in dist/
+npm run dev      # local app
+npm test         # regression tests; no live payments
+npm run lint
+npm run build    # TypeScript check and static output in dist/
+npm run preview
 ```
 
-No API keys, no environment variables, no backend. `dist/` is a static bundle that can be served
-from anywhere; the deployed copy is GitHub Pages.
+No API keys, environment variables or application backend are required. The public deployment uses GitHub Pages. Reads depend on Cookie Chain's public RPC; the RPC receives the addresses and signatures queried.
 
-## Layout
+Tests cover exact amount parsing, invalid and duplicate recipient rows, transaction packing, wallet response validation, sender filtering, duplicate signatures, failed and unresolved receipts, plan import/export, CSV escaping and interrupted-send behavior. Browser wallet signing and the Web Locks/local-storage interaction still require their own integration checks.
 
+See the [dated validation record](docs/validation.md) for the commands run, observed browser results and remaining gaps.
+
+```text
+src/chain.ts       Network constants, integer amount parsing and genesis check
+src/wallet.ts      Injected wallet detection, signing and response validation
+src/payout.ts      Recipient validation, batch construction and fee estimates
+src/send.ts        Broadcast/confirmation states and journal-before-send hook
+src/receipt.ts     Native transfer extraction and receipt verification
+src/reconcile.ts   Expected-versus-observed comparison and CSV export
+src/plan.ts        Versioned plan import/export
+src/AuditView.tsx  Reconciliation and public reference walkthrough
+src/App.tsx        Payment UI, local run journal and Web Locks coordination
+tests/             Regression tests
 ```
-src/chain.ts     Cookie Chain constants, COOK formatting and parsing, genesis check
-src/wallet.ts    Nightly and injected-wallet detection, sign-only interface
-src/payout.ts    List parsing, measured batching, fee estimation
-src/receipt.ts   Reading transactions back and summarising what was really paid
-src/App.tsx      UI for both views: making a payout, and verifying a receipt
-```
 
-## Where it stops
+## Scope
 
-- Native COOK only. SPL token payouts are the obvious next step and are not implemented.
-- The receipt URL carries signatures, so a payout of hundreds of transactions makes a long link.
-- Confirmation waits on `confirmed`, not `finalized`.
+- Native COOK only; no SPL payouts or custom on-chain program.
+- Reads and confirmations use `confirmed`, not `finalized`.
+- Decimal amounts are parsed with strings and `BigInt`, preserving up to nine decimal places without floating-point amount multiplication.
+- Reconciliation accepts up to 50 unique signatures. Long receipts produce long URLs.
+- The chain check compares `getGenesisHash` with `9wDaBRDgArEUpvhHxGguNkwozsZh4UpGZB9o2EoEcBB2`; it identifies the configured network, not the trustworthiness of every RPC response.
+- The public reference and unit tests do not establish a completed Nightly payment by Cookie Payouts.
 
 ## License
 
-Apache-2.0
+[Apache-2.0](LICENSE)

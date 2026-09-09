@@ -8,27 +8,48 @@ import {
   formatCook,
   GENESIS_HASH,
   RPC_URL,
+  verifyChain,
 } from "./chain";
 import { connect, detectProviders, type Wallet } from "./wallet";
 import {
   buildBatches,
   estimateFee,
   parseRecipients,
+  getPayoutBlocker,
   type Batch,
   type BatchStatus,
 } from "./payout";
 import {
   decodeReceipt,
+  encodeReceipt,
   receiptUrl,
   summarize,
   verifyAll,
   type VerifiedTx,
 } from "./receipt";
+import AuditView from "./AuditView";
+import { downloadText, planJson } from "./plan";
+import { submitSignedBatches } from "./send";
 import "./App.css";
 
-const SAMPLE = `# One recipient per line: address, amount in COOK
-# Blank lines and # comments are ignored.
-6emiQZnwKwDuh795v3cf2jdYQ3f2d5DfYGafzYdupjuY, 0.01`;
+const SAMPLE = `# Add your recipients: address, amount in COOK
+# Use Reconcile for a read-only public example.`;
+
+const RUN_KEY = "cookie-payouts-last-run-v1";
+interface SavedRun { sender: string; list: string; signatures: string[]; createdAt: string }
+function loadRun(): SavedRun | null {
+  try {
+    const run = JSON.parse(localStorage.getItem(RUN_KEY) ?? "null");
+    if (!run || typeof run.sender !== "string" || typeof run.list !== "string" || typeof run.createdAt !== "string" || !Array.isArray(run.signatures)) return null;
+    if (!encodeReceipt(run.signatures)) return null;
+    const parsed = parseRecipients(run.list);
+    if (parsed.errors.length || !parsed.recipients.length) return null;
+    new PublicKey(run.sender);
+    return run;
+  } catch { return null; }
+}
+
+function safeDecode(value: string) { try { return decodeURIComponent(value); } catch { return value; } }
 
 const short = (s: string, head = 6, tail = 6) =>
   s.length <= head + tail + 1 ? s : `${s.slice(0, head)}…${s.slice(-tail)}`;
@@ -87,6 +108,7 @@ function useChainFacts() {
 export default function App() {
   const hash = useHashRoute();
   const receiptMatch = hash.match(/^#\/receipt\/(.+)$/);
+  const auditMatch = hash.match(/^#\/audit(?:\/(.+))?$/);
   const facts = useChainFacts();
   const genesisOk = facts?.genesis === GENESIS_HASH;
 
@@ -97,22 +119,25 @@ export default function App() {
           <span className="mark" aria-hidden="true" />
           Cookie Payouts
         </div>
+        <nav aria-label="Main navigation"><a href="#make">Pay</a><a href="#/audit">Reconcile</a></nav>
         <ChainBadge facts={facts} ok={genesisOk} />
       </header>
 
-      {receiptMatch ? (
-        <ReceiptView encoded={decodeURIComponent(receiptMatch[1])} />
+      {auditMatch ? (
+        <AuditView key={hash} initialSignatures={auditMatch[1] ? decodeReceipt(safeDecode(auditMatch[1])) : []} />
+      ) : receiptMatch ? (
+        <ReceiptView key={receiptMatch[1]} encoded={safeDecode(receiptMatch[1])} />
       ) : (
         <>
           <Hero facts={facts} genesisOk={genesisOk} />
-          <PayoutView />
+          <PayoutView chainOk={genesisOk} />
         </>
       )}
 
       <footer className="foot">
         <p>
-          Everything on paper was read from Cookie Chain at <code>{RPC_URL}</code>. Receipts verify
-          in the reader's own browser — there is no server holding a copy of these numbers.
+          Native transfers are read from Cookie Chain at <code>{RPC_URL}</code> in your browser.
+          Comparison plans are supplied by the reader. An RPC response is not proof of identity or a prior agreement.
         </p>
         <p>
           <a href="https://github.com/EazyHood/cookie-payouts" target="_blank" rel="noreferrer">
@@ -163,28 +188,24 @@ function Hero({ facts, genesisOk }: { facts: ChainFacts | null; genesisOk: boole
     <section className="hero">
       <div>
         <motion.p className="eyebrow" {...rise(0)}>
-          Cookie Chain · batch payouts
+          Cookie Chain · payments and reconciliation
         </motion.p>
         <motion.h1 {...rise(1)}>
-          A payout nobody has to <em>take your word for.</em>
+          Pay the list. <em>Check every amount.</em>
         </motion.h1>
         <motion.p className="lede" {...rise(2)}>
-          Pay a whole list in one approval. What you hand out afterwards is not a screenshot — it is
-          a link that <strong>re-reads the transactions from the chain</strong> in the reader's own
-          browser, and is allowed to come back saying no.
+          Send native COOK to contributors, then compare what was expected with what reached the chain.
+          <strong> Find missing, extra and incorrect amounts</strong> by sender and recipient.
+          Anyone can check a receipt without connecting a wallet.
         </motion.p>
         <motion.div className="herolinks" {...rise(3)}>
-          <a href="#make">
-            <button className="primary">Make a payout</button>
-          </a>
-          <a href="https://github.com/EazyHood/cookie-payouts" target="_blank" rel="noreferrer">
-            <button className="ghost">Read the source</button>
-          </a>
+          <a href="#/audit" className="button-link primary-link">Try reconciliation</a>
+          <a href="#make" className="button-link">Make a payout</a>
         </motion.div>
 
         <motion.p className="aside" {...rise(4)}>
-          Every number on the slip was read from the chain when this page loaded. Nothing here is a
-          marketing figure, and the slip will stamp itself <em>not verified</em> if the read fails.
+          Start with a public chain example, then change the expected amount to see the difference.
+          The example is an external transaction, not a payment created by this app.
         </motion.p>
       </div>
 
@@ -224,7 +245,6 @@ function ChainAttestation({ facts, genesisOk }: { facts: ChainFacts | null; gene
       k: "Rent exempt min",
       v: facts?.rent !== undefined ? `${formatCook(facts.rent)} COOK` : null,
     },
-    { k: "Fee per transfer", v: settled && !facts.error ? "0.000005 COOK" : null },
   ];
 
   return (
@@ -304,7 +324,7 @@ function ChainAttestation({ facts, genesisOk }: { facts: ChainFacts | null; gene
 
 /* ------------------------------------------------------------------ the payout */
 
-function PayoutView() {
+function PayoutView({ chainOk }: { chainOk: boolean }) {
   const [text, setText] = useState(SAMPLE);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
@@ -314,25 +334,38 @@ function PayoutView() {
   const [statuses, setStatuses] = useState<BatchStatus[]>([]);
   const [signatures, setSignatures] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
-  const providers = useMemo(() => detectProviders(), [wallet]);
+  const [savedRun, setSavedRun] = useState<SavedRun | null>(loadRun);
+  const [reviewedRun, setReviewedRun] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const runningRef = useRef(false);
+  const providers = detectProviders();
   const parsed = useMemo(() => parseRecipients(text), [text]);
 
   const refreshBalance = useCallback(async (pk: PublicKey) => {
     try {
-      setBalance(BigInt(await connection.getBalance(pk, "confirmed")));
+      const raw = await connection.getBalance(pk, "confirmed");
+      setBalance(Number.isSafeInteger(raw) ? BigInt(raw) : null);
     } catch {
       setBalance(null);
     }
   }, []);
 
   useEffect(() => {
+    // Synchronize the visible balance with the wallet's external RPC account.
+    // eslint-disable-next-line react/set-state-in-effect
     if (wallet) refreshBalance(wallet.publicKey);
   }, [wallet, refreshBalance]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!wallet || parsed.recipients.length === 0) {
+      if (runningRef.current) return;
+      setPreviewReady(false);
+      setFee(null);
+      setPreviewError(null);
+      if (!wallet || parsed.recipients.length === 0 || parsed.errors.length > 0 || savedRun) {
         setBatches([]);
         setFee(null);
         return;
@@ -342,110 +375,151 @@ function PayoutView() {
         const bs = buildBatches(wallet.publicKey, parsed.recipients, blockhash, lastValidBlockHeight);
         if (cancelled) return;
         setBatches(bs);
-        setStatuses(bs.map(() => ({ state: "waiting" as const })));
         const f = await estimateFee(bs);
-        if (!cancelled) setFee(f);
-      } catch {
+        if (!cancelled) { setFee(f); setPreviewReady(f !== null); }
+      } catch (e) {
         if (!cancelled) {
           setBatches([]);
           setFee(null);
+          setPreviewError(e instanceof Error ? e.message : String(e));
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [wallet, text, parsed.recipients.length]);
+  }, [wallet, text, parsed, savedRun]);
 
   const total = parsed.total;
   const needed = total + (fee ?? 0n);
   const isShort = balance !== null && needed > balance;
+  const blocker = savedRun ? "Review the previous run before starting another payout." : getPayoutBlocker({
+    chainOk, hasWallet: !!wallet, recipientCount: parsed.recipients.length, errorCount: parsed.errors.length,
+    fee: previewReady ? fee : null, balance, batchCount: batches.length, running, total,
+  });
 
   async function onConnect(entry: ReturnType<typeof detectProviders>[number]) {
     setWalletError(null);
+    setConnecting(true);
     try {
       setWallet(await connect(entry));
     } catch (e) {
       setWalletError(e instanceof Error ? e.message : String(e));
-    }
+    } finally { setConnecting(false); }
   }
 
   async function onSend() {
-    if (!wallet || batches.length === 0 || running) return;
+    if (!navigator.locks) { setWalletError("This browser cannot coordinate safe sending between tabs. Use a current browser over HTTPS."); return; }
+    try {
+      await navigator.locks.request("cookie-payouts-send", { ifAvailable: true }, async lock => {
+        if (!lock) { setWalletError("A payout is already running in another view or tab. Wait for it and check its receipt."); return; }
+        const previous = loadRun();
+        if (previous) { setSavedRun(previous); setReviewedRun(false); return; }
+        if (localStorage.getItem(RUN_KEY)) { setWalletError("The saved run could not be read. Preserve it and check previous transactions before clearing this site's data."); return; }
+        await performSend();
+      });
+    } catch (e) { setWalletError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  async function clearReviewedRun() {
+    if (!reviewedRun || !savedRun || !navigator.locks) return;
+    try {
+      await navigator.locks.request("cookie-payouts-send", { ifAvailable: true }, async lock => {
+        if (!lock) { setWalletError("A payout is still running. Its recovery record cannot be cleared yet."); return; }
+        const current = loadRun();
+        if (JSON.stringify(current) !== JSON.stringify(savedRun)) {
+          setSavedRun(current); setReviewedRun(false); setWalletError("The run changed in another tab. Review the latest record first."); return;
+        }
+        localStorage.removeItem(RUN_KEY); setSavedRun(null); setReviewedRun(false);
+        setStatuses([]); setSignatures([]); setText(SAMPLE); setWalletError(null);
+      });
+    } catch (e) { setWalletError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  async function performSend() {
+    if (!wallet || blocker || runningRef.current) return;
+    runningRef.current = true;
     setRunning(true);
+    setWalletError(null);
     setSignatures([]);
-    const next: BatchStatus[] = batches.map(() => ({ state: "waiting" }));
+    let next: BatchStatus[] = batches.map(() => ({ state: "waiting" }));
     setStatuses([...next]);
 
     try {
+      const chain = await verifyChain();
+      if (!chain.ok) throw new Error("Cookie Chain could not be verified. Nothing was signed or sent.");
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
       const fresh = buildBatches(wallet.publicKey, parsed.recipients, blockhash, lastValidBlockHeight);
       setBatches(fresh);
-
-      next.forEach((_, i) => (next[i] = { state: "signing" }));
+      const [freshFee, rawBalance] = await Promise.all([estimateFee(fresh), connection.getBalance(wallet.publicKey, "confirmed")]);
+      const freshBalance = Number.isSafeInteger(rawBalance) ? BigInt(rawBalance) : null;
+      setBalance(freshBalance);
+      const freshBlocker = getPayoutBlocker({ chainOk: true, hasWallet: true, recipientCount: parsed.recipients.length,
+        errorCount: parsed.errors.length, fee: freshFee, balance: freshBalance, batchCount: fresh.length, running: false, total });
+      if (freshBlocker) throw new Error(freshBlocker);
+      if (freshFee !== fee) { setFee(freshFee); throw new Error("The fee estimate changed. Review the updated fee, then try again."); }
+      next = fresh.map(() => ({ state: "signing" }));
       setStatuses([...next]);
-
       const signed = await wallet.signAllTransactions(fresh.map((b) => b.tx));
-
-      const sigs: string[] = [];
-      for (let i = 0; i < signed.length; i++) {
-        next[i] = { state: "sending" };
-        setStatuses([...next]);
-        try {
-          const sig = await connection.sendRawTransaction(signed[i].serialize(), {
-            skipPreflight: false,
-            preflightCommitment: "confirmed",
-          });
-          next[i] = { state: "confirming", signature: sig };
-          setStatuses([...next]);
-
-          const conf = await connection.confirmTransaction(
-            { signature: sig, blockhash, lastValidBlockHeight },
-            "confirmed"
-          );
-          if (conf.value.err) {
-            next[i] = { state: "failed", signature: sig, error: JSON.stringify(conf.value.err) };
-          } else {
-            next[i] = { state: "confirmed", signature: sig };
-            sigs.push(sig);
-          }
-        } catch (e) {
-          next[i] = { state: "failed", error: e instanceof Error ? e.message : String(e) };
-        }
-        setStatuses([...next]);
-        setSignatures([...sigs]);
-      }
+      const run: SavedRun = { sender: wallet.publicKey.toBase58(), list: text, signatures: [], createdAt: new Date().toISOString() };
+      await submitSignedBatches(signed, blockhash, lastValidBlockHeight, connection,
+        (index, status) => { next[index] = status; setStatuses([...next]); },
+        signature => {
+          run.signatures = [...run.signatures, signature];
+          try { localStorage.setItem(RUN_KEY, JSON.stringify(run)); }
+          catch { throw new Error("Could not save the run on this device. Broadcast stopped to preserve recovery evidence."); }
+          setSavedRun({ ...run });
+          setSignatures([...run.signatures]);
+        });
       await refreshBalance(wallet.publicKey);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setStatuses(batches.map(() => ({ state: "failed", error: msg })));
+      setWalletError(msg);
+      setStatuses(next.map(() => ({ state: "failed", error: msg })));
     } finally {
+      runningRef.current = false;
       setRunning(false);
     }
   }
 
   const done =
-    statuses.length > 0 && statuses.every((s) => s.state === "confirmed" || s.state === "failed");
+    statuses.length > 0 && statuses.every((s) => ["confirmed", "failed", "uncertain", "skipped"].includes(s.state));
 
   return (
     <main className="instrument" id="make">
       <p className="rule">The instrument</p>
+      {savedRun && <section className="card saved-run">
+        <h2>Previous run saved on this device</h2>
+        <p className="hint">A broadcast was attempted for {savedRun.signatures.length} transaction(s). Read their current status before making another payout. A timeout does not prove they failed.</p>
+        <div className="btnrow">
+          <a className="button-link" href={receiptUrl(savedRun.signatures)}>Check saved receipt</a>
+          <a className="button-link" href={`#/audit/${savedRun.signatures.join(".")}`}>Reconcile this run</a>
+          <button onClick={() => downloadText("cookie-payout-run.json", JSON.stringify(savedRun, null, 2), "application/json")}>Download run record</button>
+          <button onClick={() => downloadText("cookie-payout-plan.json", planJson({ sender: savedRun.sender, recipients: parseRecipients(savedRun.list).recipients }), "application/json")}>Download original plan</button>
+        </div>
+        {!running && <><label className="check-label"><input type="checkbox" checked={reviewedRun} onChange={e => setReviewedRun(e.target.checked)} />I checked this run and understand that paying the same list again can duplicate payments.</label>
+          <button disabled={!reviewedRun} onClick={clearReviewedRun}>Start a different payout</button></>}
+      </section>}
       <div className="grid">
         <section className="card">
           <h2>
             <span className="step">01</span> The list
           </h2>
           <p className="hint">
-            One line per recipient: address, then the amount in COOK. Every line that cannot be read
-            is reported below with its number — nothing is dropped quietly.
+            One address and COOK amount per line, up to 200 recipients. Fix every rejected line before sending.
           </p>
+          <label className="visually-hidden" htmlFor="payout-list">Recipients</label>
           <textarea
             value={text}
+            id="payout-list"
+            disabled={running || !!savedRun}
             spellCheck={false}
             onChange={(e) => setText(e.target.value)}
             rows={11}
             aria-label="Recipients"
           />
+          <div className="btnrow" style={{ marginTop: 12 }}><button disabled={!wallet || !!parsed.errors.length || !parsed.recipients.length || running}
+            onClick={() => wallet && downloadText("cookie-payout-plan.json", planJson({ sender: wallet.publicKey.toBase58(), recipients: parsed.recipients }), "application/json")}>Download plan before paying</button></div>
           <div className="tally">
             <div>
               <span className="n">{parsed.recipients.length}</span>
@@ -489,8 +563,8 @@ function PayoutView() {
           {!wallet ? (
             <>
               <p className="hint">
-                Nightly signs; this app submits to Cookie Chain itself. Wallets that broadcast
-                through their own RPC would send the transaction to Solana, where it never lands.
+                Connect a Nightly SVM account. The wallet signs; this app submits to Cookie Chain.
+                Depending on wallet support, a large payout may require multiple approvals.
               </p>
               {providers.length === 0 ? (
                 <p className="note bad">
@@ -503,13 +577,12 @@ function PayoutView() {
               ) : (
                 <div className="btnrow">
                   {providers.map((p) => (
-                    <button key={p.name} className="primary" onClick={() => onConnect(p)}>
-                      Connect {p.name}
+                    <button key={p.name} className="primary" disabled={connecting || running} onClick={() => onConnect(p)}>
+                      {connecting ? "Connecting…" : `Connect ${p.name}`}
                     </button>
                   ))}
                 </div>
               )}
-              {walletError && <p className="note bad">{walletError}</p>}
             </>
           ) : (
             <motion.dl
@@ -545,6 +618,9 @@ function PayoutView() {
               Short by {formatCook(needed - (balance ?? 0n))} COOK. Nothing has been sent.
             </p>
           )}
+          <p className="hint" style={{ marginTop: 16 }}>Need a Cookie Chain account or native COOK? <a href="https://docs.cookiechain.wtf/wallets" target="_blank" rel="noreferrer">Wallet setup</a> · <a href="https://docs.cookiechain.wtf/bridge" target="_blank" rel="noreferrer">Bridge guide</a></p>
+          {walletError && <p className="note bad" role="alert">{walletError}{walletError.includes("501") && " — Open Nightly and create or select an SVM account, then connect again."}</p>}
+          {previewError && <p className="note bad" role="alert">{previewError}</p>}
         </section>
 
         <section className="card wide">
@@ -553,7 +629,8 @@ function PayoutView() {
           </h2>
           <motion.button
             className="primary big"
-            disabled={!wallet || batches.length === 0 || running || isShort}
+            disabled={!!blocker}
+            aria-describedby="payout-blocker"
             onClick={onSend}
             whileTap={{ scale: 0.995 }}
           >
@@ -561,6 +638,7 @@ function PayoutView() {
               ? "Sending…"
               : `Pay ${parsed.recipients.length} recipient${parsed.recipients.length === 1 ? "" : "s"}`}
           </motion.button>
+          <p className="hint" id="payout-blocker" style={{ marginTop: 12 }}>{blocker ?? "Review the full list, total and fee above. You approve each required transaction in your wallet."}</p>
 
           {statuses.length > 0 && (
             <ol className="batches">
@@ -602,6 +680,10 @@ function StatusLabel({ s }: { s: BatchStatus }) {
           waiting for your signature
         </span>
       );
+    case "uncertain":
+      return <span className="bad">Status unknown — do not resend. <a href={explorerTx(s.signature)} target="_blank" rel="noreferrer">Check transaction</a><span className="small"> · {s.error}</span></span>;
+    case "skipped":
+      return <span className="muted">Not sent · {s.error}</span>;
     case "sending":
       return (
         <span className="muted">
@@ -650,10 +732,9 @@ function ReceiptLink({ signatures }: { signatures: string[] }) {
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       style={{ marginTop: 22, paddingTop: 20, borderTop: "1px solid var(--ink-600)" }}
     >
-      <h2 style={{ marginBottom: 6 }}>The receipt</h2>
+      <h2 style={{ marginBottom: 6 }}>Run receipt</h2>
       <p className="hint">
-        This link carries signatures, not amounts. Whoever opens it reads the transactions back from
-        Cookie Chain themselves.
+        This link includes every attempted broadcast, including uncertain results. Open it to read their current chain status, then compare with the original plan.
       </p>
       <div className="copyrow">
         <input ref={ref} readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
@@ -681,28 +762,36 @@ function ReceiptLink({ signatures }: { signatures: string[] }) {
 function ReceiptView({ encoded }: { encoded: string }) {
   const signatures = useMemo(() => decodeReceipt(encoded), [encoded]);
   const [txs, setTxs] = useState<VerifiedTx[] | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [readAttempt, setReadAttempt] = useState(0);
   const reduce = useReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
-    setTxs(null);
-    verifyAll(signatures).then((r) => {
-      if (!cancelled) setTxs(r);
-    });
+    (async () => {
+      try {
+        const chain = await verifyChain();
+        if (!chain.ok) throw new Error("Cookie Chain could not be verified. Try reading again before trusting this receipt.");
+        const result = await verifyAll(signatures);
+        if (!cancelled) setTxs(result);
+      } catch (e) { if (!cancelled) setReadError(e instanceof Error ? e.message : String(e)); }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [signatures]);
+  }, [signatures, readAttempt]);
 
   const s = txs ? summarize(txs) : null;
-  const allGood = !!s && s.failed === 0 && s.missing === 0 && s.paid > 0 && s.recipients > 0;
+  const allGood = !!s && s.failed === 0 && s.missing === 0 && s.unresolved === 0 && s.paid > 0 && s.recipients > 0;
 
   return (
     <main className="instrument" style={{ paddingTop: "clamp(36px,6vw,72px)" }}>
-      <p className="rule">Receipt · verified against the chain</p>
+      <p className="rule">Transaction receipt · read from Cookie Chain</p>
+      {readError && <p className="note bad" role="alert">{readError} <button onClick={() => { setTxs(null); setReadError(null); setReadAttempt(n => n + 1); }}>Read again</button></p>}
 
       <motion.div
         className="sheet-wrap"
+        hidden={!!readError}
         style={{ maxWidth: 620, margin: "0 auto 26px" }}
         initial={reduce ? {} : { opacity: 0, y: 22 }}
         animate={{ opacity: 1, y: 0 }}
@@ -710,14 +799,14 @@ function ReceiptView({ encoded }: { encoded: string }) {
       >
         <div className="sheet">
           <div className="sheet-head">
-            <span className="sheet-title">Payout receipt</span>
+            <span className="sheet-title">Native transfer receipt</span>
             <span className="sheet-meta">
               {signatures.length} transaction{signatures.length === 1 ? "" : "s"}
             </span>
           </div>
 
           <div className="sheet-row">
-            <span className="k">Recipients paid</span>
+            <span className="k">Unique recipients</span>
             <span className={`v ${txs ? "" : "pending"}`}>{s ? s.recipients : "reading…"}</span>
           </div>
           <div className="sheet-row">
@@ -736,6 +825,7 @@ function ReceiptView({ encoded }: { encoded: string }) {
               <span className="v neg">{s.missing}</span>
             </div>
           )}
+          {s && s.unresolved > 0 && <div className="sheet-row"><span className="k">Unresolved reads</span><span className="v neg">{s.unresolved}</span></div>}
           <div className="sheet-row">
             <span className="k">Fees</span>
             <span className={`v ${txs ? "" : "pending"}`}>
@@ -744,7 +834,7 @@ function ReceiptView({ encoded }: { encoded: string }) {
           </div>
 
           <div className="sheet-total">
-            <span>Total paid</span>
+            <span>Native transfers</span>
             <span>{s ? `${formatCook(s.total)} COOK` : "—"}</span>
           </div>
 
@@ -756,7 +846,7 @@ function ReceiptView({ encoded }: { encoded: string }) {
                 animate={{ opacity: 0.88, scale: 1, rotate: -7 }}
                 transition={{ duration: 0.5, delay: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
               >
-                {allGood ? "Verified" : "Not verified"}
+                {allGood ? "Observed on chain" : "Review required"}
               </motion.span>
             )}
           </AnimatePresence>
@@ -765,11 +855,12 @@ function ReceiptView({ encoded }: { encoded: string }) {
 
       {s && !allGood && (
         <p className="note bad" style={{ maxWidth: 620, margin: "0 auto 24px" }}>
-          {s.recipients === 0 && s.failed === 0 && s.missing === 0
-            ? "These transactions are on chain and confirmed, but none of them moved any COOK. This is not a payout receipt."
-            : "This receipt does not fully check out. Everything below was read from the chain just now — treat anything failed or missing as unpaid."}
+          {s.recipients === 0 && s.failed === 0 && s.missing === 0 && s.unresolved === 0 && s.paid > 0
+            ? "These transactions confirmed, but no native transfer instructions were observed. Other instructions or token movements are outside this receipt's scope."
+            : "This receipt is incomplete. A missing transaction or unavailable RPC response does not prove nonpayment. Resolve unknown results before resending."}
         </p>
       )}
+      <p className="note scope-note">This receipt reads native transfer instructions at confirmed commitment. It does not prove who controls an address, a prior agreement or final net settlement. <a href={`#/audit/${signatures.join(".")}`}>Compare with your original payout plan →</a></p>
 
       <div className="grid">
         {(txs ?? []).map((t, i) => (
@@ -782,7 +873,7 @@ function ReceiptView({ encoded }: { encoded: string }) {
           >
             <h2>
               <span className={t.found && t.succeeded ? "ok" : "bad"}>
-                {t.found ? (t.succeeded ? "Confirmed" : "Failed on chain") : "Not found on chain"}
+                {t.status === "rpc_error" ? "RPC unavailable" : t.status === "unresolved" ? "Incomplete chain evidence" : t.found ? (t.succeeded ? "Confirmed" : "Failed on chain") : "Not found on chain"}
               </span>
             </h2>
             <p className="mono small">
@@ -803,8 +894,7 @@ function ReceiptView({ encoded }: { encoded: string }) {
             {t.error && <p className="note bad">{t.error}</p>}
             {t.found && t.succeeded && t.transfers.length === 0 && (
               <p className="note bad">
-                This transaction confirmed, but it contains no native COOK transfers. It is on chain
-                and it paid nobody — do not read it as a payout.
+                This transaction confirmed, but no native transfer instructions were observed. Other token or account movements are outside this receipt's scope.
               </p>
             )}
             {t.transfers.length > 0 && (
@@ -819,6 +909,7 @@ function ReceiptView({ encoded }: { encoded: string }) {
                   {t.transfers.map((tr, j) => (
                     <tr key={j}>
                       <td className="mono small">
+                        <span className="muted">from {short(tr.from, 6, 6)} → </span>
                         <a href={explorerAddress(tr.to)} target="_blank" rel="noreferrer">
                           {short(tr.to, 10, 10)}
                         </a>
