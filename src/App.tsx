@@ -261,11 +261,11 @@ function ChainAttestation({ facts, genesisOk }: { facts: ChainFacts | null; gene
                   reading…
                 </motion.span>
               ) : (
-                {/* Opacity only, no transform. Animating the position of small
-                    mono text puts it on its own compositor layer, and a layer
-                    that has not been painted yet renders as an empty row — the
-                    slip looked blank while the values were sitting in the DOM.
-                    A fade carries the same sequence without that risk. */}
+                // Opacity only, no transform. Animating the position of small
+                // mono text puts it on its own compositor layer, and a layer
+                // that has not been painted yet renders as an empty row — the
+                // slip looked blank while the values sat in the DOM. A fade
+                // carries the same sequence without that risk.
                 <motion.span
                   key="value"
                   className={`v ${r.tone ?? ""}`}
