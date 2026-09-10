@@ -10,7 +10,7 @@ import {
   RPC_URL,
   verifyChain,
 } from "./chain";
-import { connect, detectProviders, type Wallet } from "./wallet";
+import { connect, detectProviders, subscribeProvidersChanged, type Wallet } from "./wallet";
 import {
   buildBatches,
   estimateFee,
@@ -220,7 +220,13 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
   const [previewReady, setPreviewReady] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const runningRef = useRef(false);
-  const providers = detectProviders();
+  const [providers, setProviders] = useState(() => detectProviders());
+  useEffect(() => {
+    const refresh = () => setProviders(detectProviders());
+    const stop = subscribeProvidersChanged(refresh);
+    refresh();
+    return stop;
+  }, []);
   const parsed = useMemo(() => parseRecipients(text), [text]);
 
   const refreshBalance = useCallback(async (pk: PublicKey) => {
@@ -284,7 +290,8 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
     try {
       setWallet(await connect(entry));
     } catch (e) {
-      setWalletError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setWalletError(`${entry.name}: ${message}${message.includes("501") ? " — Select a Solana/SVM signing account in that wallet and reconnect." : ""}`);
     } finally { setConnecting(false); }
   }
 
@@ -477,6 +484,9 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
                   ))}
                 </div>
               )}
+              {providers.length > 0 && !providers.some(p => p.kind === "nightly") && (
+                <p className="note">Nightly is not detected in this browser. <a href="https://nightly.app/" target="_blank" rel="noreferrer">Install or enable Nightly</a> to connect with it.</p>
+              )}
             </>
           ) : (
             <motion.dl
@@ -513,7 +523,7 @@ function PayoutView({ chainOk }: { chainOk: boolean }) {
             </p>
           )}
           <div className="wallet-guides"><a href="https://docs.cookiechain.wtf/wallets" target="_blank" rel="noreferrer">Wallet setup <Icon name="external" size={12} /></a><a href="https://docs.cookiechain.wtf/bridge" target="_blank" rel="noreferrer">Get native COOK <Icon name="external" size={12} /></a></div>
-          {walletError && <p className="note bad" role="alert">{walletError}{walletError.includes("501") && " — Open Nightly and create or select an SVM account, then connect again."}</p>}
+          {walletError && <p className="note bad" role="alert">{walletError}</p>}
           {previewError && <p className="note bad" role="alert">{previewError}</p>}
         </section>
 

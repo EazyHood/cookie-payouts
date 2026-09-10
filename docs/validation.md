@@ -56,6 +56,18 @@ Browser checks covered 375 px mobile, 768 px tablet and 1440 px desktop layouts 
 
 The public reference still produced a 100 COOK match and a 101 COOK expected-versus-100 observed shortfall. An entered recipient appeared in the payment preview with the exact 12.5 COOK total; payment remained disabled without a connected wallet. No wallet connection, signing or broadcast was performed for this design review. Build, lint and all 52 existing tests passed after the redesign.
 
+## Nightly Wallet Standard compatibility — 10 September 2026 UTC
+
+The previous detector required legacy `connect` and signing methods directly on the injected provider. A Nightly provider exposing only Wallet Standard was therefore omitted. The adapter now discovers Nightly through the standard registry or namespace, retains the legacy fallback, deduplicates aliases, and refreshes the UI when wallets register or unregister. Generic injections are not labelled as Nightly, including in connection error guidance.
+
+The standard path connects an authorized Solana/SVM account and requests `solana:signTransaction` only. It preserves the existing transaction-message and signature checks and rejects missing responses, changed messages and revoked accounts before allowing the caller to broadcast. It never requests `signAndSendTransaction` or changes the wallet's network.
+
+All **65 tests passed**, including 13 new standard-wallet cases; lint and production build passed. The new cases cover standard-only and legacy detection, deduplication, account capabilities, exact transaction bytes, altered or unsigned responses, missing batches, account revocation and late registration cleanup. These use controlled wallet fixtures; no funds were moved by them. The production preview loaded with an unrelated injected provider, displayed the explicit Nightly-not-detected guidance and kept payment disabled without a connected account. The live browser's previous `501` error alone does not identify its wallet implementation.
+
+This closes a compatibility gap in the code. It is **not** evidence of a completed real Nightly connection or an application-originated Cookie Chain payout. The actual Nightly extension and funded round trip remain unverified. The production JavaScript bundle is approximately 688 kB before compression and retains Vite's size warning.
+
+Contract references: [Nightly detection](https://docs.nightly.app/docs/solana/solana/detection/), [Nightly connection](https://docs.nightly.app/docs/solana/solana/connect/), [Solana Wallet Standard signing interface](https://github.com/solana-labs/wallet-standard/blob/master/packages/core/features/src/signTransaction.ts).
+
 ## Interpretation limits
 
 Read-only checks use the configured public RPC at `confirmed` commitment. They compare native System Program transfer instructions, not finality, net balance settlement, identity or payment purpose. They inspect only supplied signatures, not all chain history. Unknown, failed, conflicting or incomplete observations cannot yield a complete reconciliation. SPL tokens and custom payout programs are outside the application's current scope.

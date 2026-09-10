@@ -42,6 +42,8 @@ We do not assert its purpose or authorship. It demonstrates reading and comparis
 
 The wallet signs; the app submits the signed bytes to `https://rpc.cookiescan.io`. It checks the returned messages and signatures before broadcasting, rechecks the chain and funding requirements before signing, and stops for review if the fee estimate changed.
 
+Nightly is detected through Wallet Standard and its legacy Solana injection. Wallet Standard registration updates the available choices without reloading. The integration requests `standard:connect` and `solana:signTransaction`, then validates the signed bytes before the app broadcasts them. An unrelated injected wallet stays labelled **Injected wallet**; its presence is not proof that Nightly is available. If error `501` appears, select a Solana/SVM account in the named wallet and reconnect. A full funded Nightly payout is still pending validation.
+
 ## What reconciliation establishes
 
 The reader fetches the supplied signatures from Cookie Chain in their own browser. Only successfully executed native System Program transfer instructions count. The parser checks the program identifier, reads top-level and inner instructions, and retains the source of each transfer. Transfers from a different sender are excluded, repeated signatures count once, and incomplete or conflicting observations remain unresolved.
@@ -79,7 +81,7 @@ See the [dated validation record](docs/validation.md) for the commands run, obse
 
 ```text
 src/chain.ts       Network constants, integer amount parsing and genesis check
-src/wallet.ts      Injected wallet detection, signing and response validation
+src/wallet.ts      Wallet Standard/legacy detection, signing and response validation
 src/payout.ts      Recipient validation, batch construction and fee estimates
 src/send.ts        Broadcast/confirmation states and journal-before-send hook
 src/receipt.ts     Native transfer extraction and receipt verification

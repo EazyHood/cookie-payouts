@@ -1,12 +1,12 @@
 import { PublicKey, Transaction } from "@solana/web3.js";
+import { getWallets, type Wallet as StandardWallet, type WalletAccount } from "@wallet-standard/core";
 
 /**
  * Wallet plumbing.
  *
- * The bounty requires Nightly, which injects `window.nightly.solana`. Any other
- * injected Solana wallet exposing the same three methods works too, so this
- * detects rather than hardcodes — but Nightly is listed first and labelled, so a
- * reader can see the required one is actually wired.
+ * Nightly is discovered through Wallet Standard first, then its legacy
+ * `window.nightly.solana` injection. Other compatible injected Solana wallets
+ * remain available, without being relabelled as Nightly.
  *
  * Note on `signAndSendTransaction`: several wallets implement it by sending
  * through *their own* RPC, which for a wallet that does not know Cookie Chain
@@ -32,6 +32,95 @@ interface Provider {
   signAllTransactions?(txs: Transaction[]): Promise<Transaction[]>;
 }
 
+interface StandardSignInput {
+  account: WalletAccount;
+  transaction: Uint8Array;
+}
+interface CompatibleStandardWallet extends StandardWallet {
+  readonly features: StandardWallet["features"] & {
+    "standard:connect": { connect(input?: { silent?: boolean }): Promise<{ accounts: readonly WalletAccount[] }> };
+    "solana:signTransaction": {
+      supportedTransactionVersions: readonly ("legacy" | 0)[];
+      signTransaction(...inputs: StandardSignInput[]): Promise<readonly { signedTransaction: Uint8Array }[]>;
+    };
+  };
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" ? value as Record<string, unknown> : undefined;
+}
+
+function isStandardSigner(value: unknown): value is CompatibleStandardWallet {
+  const wallet = record(value);
+  const features = record(wallet?.features);
+  const connectFeature = record(features?.["standard:connect"]);
+  const signFeature = record(features?.["solana:signTransaction"]);
+  return wallet?.version === "1.0.0" && typeof wallet.name === "string" &&
+    Array.isArray(wallet.accounts) && Array.isArray(wallet.chains) &&
+    wallet.chains.some(chain => typeof chain === "string" && chain.startsWith("solana:")) &&
+    typeof connectFeature?.connect === "function" && typeof signFeature?.signTransaction === "function" &&
+    Array.isArray(signFeature.supportedTransactionVersions) && signFeature.supportedTransactionVersions.includes("legacy");
+}
+
+function isSolanaAccount(account: WalletAccount): boolean {
+  return !!account && typeof account.address === "string" && account.publicKey instanceof Uint8Array &&
+    account.publicKey.length === 32 && Array.isArray(account.chains) &&
+    account.chains.some(chain => typeof chain === "string" && chain.startsWith("solana:")) &&
+    Array.isArray(account.features) && account.features.includes("solana:signTransaction");
+}
+
+const standardProviders = new WeakMap<StandardWallet, Provider>();
+
+function standardProvider(wallet: CompatibleStandardWallet): Provider {
+  const cached = standardProviders.get(wallet);
+  if (cached) return cached;
+  let selectedAddress: string | undefined;
+  const currentAccount = () => wallet.accounts.find(account =>
+    isSolanaAccount(account) && account.address === selectedAddress &&
+    new PublicKey(account.publicKey).toBase58() === selectedAddress);
+  const provider: Provider = {
+    get publicKey() {
+      const account = currentAccount();
+      return account ? new PublicKey(account.publicKey) : null;
+    },
+    async connect(options) {
+      const output = await wallet.features["standard:connect"].connect({ silent: options?.onlyIfTrusted });
+      const account = output?.accounts?.find(isSolanaAccount);
+      if (!account) throw new Error(`${wallet.name} did not authorize a Solana/SVM signing account. Select one in the wallet and reconnect.`);
+      const publicKey = new PublicKey(account.publicKey);
+      if (publicKey.toBase58() !== account.address) throw new Error(`${wallet.name} returned inconsistent account details.`);
+      selectedAddress = account.address;
+      return { publicKey };
+    },
+    async signAllTransactions(txs) {
+      const account = currentAccount();
+      if (!account || !isStandardSigner(wallet)) throw new Error("Wallet account or signing support changed. Reconnect and review the payout.");
+      const input = txs.map(tx => ({
+        account,
+        transaction: new Uint8Array(tx.serialize({ requireAllSignatures: false, verifySignatures: false })),
+      }));
+      // Sign only: never use solana:signAndSendTransaction or ask the wallet to
+      // change network. The app broadcasts the validated bytes to its own RPC.
+      const output = await wallet.features["solana:signTransaction"].signTransaction(...input);
+      if (!Array.isArray(output) || output.length !== txs.length) {
+        throw new Error("Wallet returned a different number of transactions. Nothing was sent.");
+      }
+      return output.map(result => {
+        if (!(result?.signedTransaction instanceof Uint8Array)) throw new Error("Wallet returned invalid signed transaction bytes. Nothing was sent.");
+        return Transaction.from(result.signedTransaction);
+      });
+    },
+    async disconnect() {
+      const feature = record(wallet.features["standard:disconnect"]);
+      try {
+        if (typeof feature?.disconnect === "function") await feature.disconnect();
+      } finally { selectedAddress = undefined; }
+    },
+  };
+  standardProviders.set(wallet, provider);
+  return provider;
+}
+
 function canSign(provider: Provider | undefined): provider is Provider {
   return !!provider && typeof provider.connect === "function" &&
     (typeof provider.signAllTransactions === "function" || typeof provider.signTransaction === "function");
@@ -39,19 +128,45 @@ function canSign(provider: Provider | undefined): provider is Provider {
 
 declare global {
   interface Window {
-    nightly?: { solana?: Provider };
-    solana?: Provider & { isNightly?: boolean };
+    nightly?: { solana?: Partial<Provider> & { standardWallet?: StandardWallet; features?: StandardWallet["features"] } };
+    solana?: Provider & { isNightly?: boolean; standardWallet?: StandardWallet };
   }
 }
 
-export function detectProviders(): { kind: WalletKind; name: string; provider: Provider }[] {
+function registeredWallets(): readonly StandardWallet[] {
+  if (typeof window === "undefined" || typeof window.addEventListener !== "function") return [];
+  return getWallets().get();
+}
+
+/** Refresh the visible choices when extensions register after the app loads. */
+export function subscribeProvidersChanged(listener: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const registry = getWallets();
+  const stopRegister = registry.on("register", listener);
+  const stopUnregister = registry.on("unregister", listener);
+  return () => { stopRegister(); stopUnregister(); };
+}
+
+/** The optional registry snapshot also permits offline capability tests. */
+export function detectProviders(standardWallets: readonly StandardWallet[] = registeredWallets()): { kind: WalletKind; name: string; provider: Provider }[] {
   const out: { kind: WalletKind; name: string; provider: Provider }[] = [];
-  const nightly = canSign(window.nightly?.solana) ? window.nightly?.solana : undefined;
-  if (nightly) out.push({ kind: "nightly", name: "Nightly", provider: nightly });
+  if (typeof window === "undefined") return out;
+  const nightlyInjection = window.nightly?.solana;
+  const standardCandidates: unknown[] = [nightlyInjection?.standardWallet, nightlyInjection, window.solana?.standardWallet, ...standardWallets];
+  const seen = new Set<StandardWallet>();
+  for (const candidate of standardCandidates) {
+    if (!isStandardSigner(candidate) || candidate.name !== "Nightly" || seen.has(candidate)) continue;
+    seen.add(candidate);
+    if (!out.some(entry => entry.kind === "nightly")) {
+      out.push({ kind: "nightly", name: "Nightly", provider: standardProvider(candidate) });
+    }
+  }
+  const nightly = canSign(nightlyInjection as Provider | undefined) ? nightlyInjection as Provider : undefined;
+  if (nightly && !out.some(entry => entry.kind === "nightly")) out.push({ kind: "nightly", name: "Nightly", provider: nightly });
   const generic = window.solana;
   if (canSign(generic) && generic !== nightly) {
-    if (generic.isNightly) {
-      if (!nightly) out.unshift({ kind: "nightly", name: "Nightly", provider: generic });
+    if (generic.isNightly || generic.standardWallet?.name === "Nightly") {
+      if (!out.some(entry => entry.kind === "nightly")) out.unshift({ kind: "nightly", name: "Nightly", provider: generic });
     } else {
       out.push({ kind: "injected", name: "Injected wallet", provider: generic });
     }
@@ -97,7 +212,7 @@ export async function connect(entry: { kind: WalletKind; name: string; provider:
   const publicKey = raw instanceof PublicKey ? raw : new PublicKey(String(raw));
 
   const assertCurrentAccount = () => {
-    if (p.publicKey && !new PublicKey(p.publicKey).equals(publicKey)) {
+    if (p.publicKey === null || (p.publicKey && !new PublicKey(p.publicKey).equals(publicKey))) {
       throw new Error("Wallet account changed. Reconnect and review the payout before signing.");
     }
   };
@@ -107,6 +222,7 @@ export async function connect(entry: { kind: WalletKind; name: string; provider:
     name: entry.name,
     publicKey,
     async signAllTransactions(txs: Transaction[]) {
+      if (!txs.length) throw new Error("No transactions to sign. Nothing was sent.");
       assertCurrentAccount();
       // Preserve the reviewed messages independently of provider mutations.
       const originals = txs.map((tx) => Transaction.from(tx.serialize({
